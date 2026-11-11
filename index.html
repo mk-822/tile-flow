@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#080913">
+  <meta name="description" content="タイルを受け止め、同じ色を3枚そろえる。光と音が連動する3Dパズル、Tile Flow。">
+  <link rel="icon" href="/tile-flow.svg" type="image/svg+xml">
+  <title>Tile Flow — 3D Tile Puzzle</title>
+</head>
+<body>
+  <svg class="icon-library" aria-hidden="true" xmlns="http://www.w3.org/2000/svg">
+    <symbol id="i-sound" viewBox="0 0 24 24"><path d="M4 9v6h4l5 4V5L8 9H4Zm12-1a6 6 0 0 1 0 8m2-11a10 10 0 0 1 0 14"/></symbol>
+    <symbol id="i-mute" viewBox="0 0 24 24"><path d="M4 9v6h4l5 4V5L8 9H4Zm12 1 5 5m0-5-5 5"/></symbol>
+    <symbol id="i-pause" viewBox="0 0 24 24"><path d="M9 5v14m6-14v14"/></symbol>
+    <symbol id="i-full" viewBox="0 0 24 24"><path d="M9 4H4v5m11-5h5v5M4 15v5h5m11-5v5h-5"/></symbol>
+    <symbol id="i-play" viewBox="0 0 24 24"><path d="m9 5 11 7-11 7V5Z" fill="currentColor" stroke="none"/></symbol>
+    <symbol id="i-help" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9.5 9a2.5 2.5 0 1 1 4.1 1.9c-1.3.9-1.6 1.2-1.6 2.6m0 2.6h.01"/></symbol>
+    <symbol id="i-close" viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"/></symbol>
+    <symbol id="i-left" viewBox="0 0 24 24"><path d="m14 6-6 6 6 6"/></symbol>
+    <symbol id="i-right" viewBox="0 0 24 24"><path d="m10 6 6 6-6 6"/></symbol>
+    <symbol id="i-up" viewBox="0 0 24 24"><path d="M12 19V5m-6 6 6-6 6 6"/></symbol>
+    <symbol id="i-fast" viewBox="0 0 24 24"><path d="m6 6 6 5 6-5M6 13l6 5 6-5"/></symbol>
+    <symbol id="i-drop" viewBox="0 0 24 24"><path d="m7 9 5 5 5-5M5 19h14"/></symbol>
+  </svg>
+  <main class="app">
+    <header class="topbar">
+      <div class="brand" aria-label="Tile Flow">
+        <img src="/tile-flow.svg" alt="" width="42" height="42">
+        <h1>TILE <span>FLOW</span></h1>
+      </div>
+      <div class="top-actions" aria-label="ゲーム設定">
+        <button class="icon-button" id="sound" type="button" aria-label="サウンド" aria-pressed="true" title="サウンド (M)"><svg><use href="#i-sound"/></svg></button>
+        <button class="icon-button" id="pause" type="button" aria-label="一時停止" title="一時停止 (Esc)" disabled><svg><use href="#i-pause"/></svg></button>
+        <button class="icon-button fullscreen" id="fullscreen" type="button" aria-label="全画面" aria-pressed="false" title="全画面"><svg><use href="#i-full"/></svg></button>
+      </div>
+    </header>
+
+    <div class="game-layout">
+      <aside class="telemetry" aria-label="ウェーブとスコア">
+        <section class="wave-block">
+          <h2 class="label"><span class="indicator"></span> WAVE</h2>
+          <div id="wave-number" class="wave-number">01</div>
+          <p id="wave-name" class="wave-name">FIRST LIGHT</p>
+          <div class="objective">
+            <div class="objective-row"><span id="goal-label">FLOW</span><span id="goal-value">0 / 3</span></div>
+            <div class="progress-track" id="goal-track" role="progressbar" aria-label="ウェーブ目標" aria-valuemin="0" aria-valuemax="3" aria-valuenow="0"><div id="goal-fill"></div></div>
+          </div>
+        </section>
+        <section class="score-block">
+          <h2 class="label">SCORE</h2>
+          <div id="score" class="score">000000</div>
+          <p class="best">BEST <span id="best">000000</span></p>
+        </section>
+        <section class="drops-block">
+          <h2 class="label">DROPS</h2>
+          <div class="drops" id="drops" role="img" aria-label="落とせるタイル 残り3枚"><span></span><span></span><span></span></div>
+        </section>
+      </aside>
+
+      <section class="stage" aria-label="3Dプレイフィールド">
+        <div id="viewport" class="viewport"></div>
+        <div class="stage-reticle" aria-hidden="true"></div>
+        <div class="stage-status"><span></span><span id="stage-status">STANDBY</span></div>
+        <div id="announce" class="announce" aria-hidden="true"></div>
+        <div class="now-playing" id="now-playing" role="status"><span aria-hidden="true">♪</span> <span id="track-name"></span></div>
+        <div class="screen" id="screen">
+          <p class="screen-title" id="screen-title" hidden></p>
+          <p class="screen-message" id="screen-message" hidden></p>
+          <button type="button" class="play-button" id="play"><svg><use href="#i-play"/></svg><span id="play-label">START WAVE</span></button>
+          <p class="keyboard-hint" id="keyboard-hint"><kbd>Enter</kbd> でスタート</p>
+        </div>
+        <fieldset id="difficulty" class="difficulty" hidden>
+          <legend class="sr-only">難易度</legend>
+          <label><input type="radio" name="difficulty" value="easy"><span>初級</span></label>
+          <label><input type="radio" name="difficulty" value="normal" checked><span>中級</span></label>
+          <label><input type="radio" name="difficulty" value="hard"><span>上級</span></label>
+        </fieldset>
+        <p id="status-live" class="sr-only" role="status"></p>
+      </section>
+
+      <aside class="tool-panel" aria-label="パドルと操作">
+        <section class="paddle-block">
+          <h2 class="label">PADDLE <span id="paddle-count" class="paddle-count">0 / 5</span></h2>
+          <div class="paddle-slots" id="paddle-slots" role="img" aria-label="パドル 0 / 5"><span></span><span></span><span></span><span></span><span></span></div>
+        </section>
+        <section class="key-guide">
+          <h2 class="label">CONTROLS</h2>
+          <dl>
+            <div><dt>移動</dt><dd><kbd>←</kbd><kbd>→</kbd></dd></div>
+            <div><dt>タイルを置く</dt><dd><kbd>SPACE</kbd></dd></div>
+            <div><dt>ベルトへ返す</dt><dd><kbd>↑</kbd></dd></div>
+            <div><dt>全タイルを加速</dt><dd><kbd>↓</kbd></dd></div>
+          </dl>
+        </section>
+        <button class="help-button" id="help" type="button"><svg><use href="#i-help"/></svg>遊び方</button>
+      </aside>
+
+      <div class="touch-controls" aria-label="タッチ操作">
+        <button type="button" data-action="left" aria-label="左に移動"><svg><use href="#i-left"/></svg></button>
+        <button type="button" data-action="right" aria-label="右に移動"><svg><use href="#i-right"/></svg></button>
+        <button type="button" data-action="place" class="touch-place"><svg><use href="#i-drop"/></svg>置く</button>
+        <button type="button" data-action="throw" aria-label="ベルトへ返す"><svg><use href="#i-up"/></svg></button>
+        <button type="button" data-action="fast" aria-label="押している間ベルト上の全タイルを加速"><svg><use href="#i-fast"/></svg></button>
+      </div>
+    </div>
+
+    <footer class="game-footer">
+      <div class="match-example" aria-hidden="true"><span></span><span></span><span></span></div>
+      <p>同じ色を3枚以上、縦・横・斜めにそろえて <strong>FLOW</strong></p>
+      <button class="help-button mobile-help" id="mobile-help" type="button" aria-label="遊び方"><svg><use href="#i-help"/></svg></button>
+    </footer>
+  </main>
+
+  <dialog id="guide" aria-labelledby="guide-title">
+    <div class="dialog-head">
+      <h2 id="guide-title">遊び方</h2>
+      <button class="icon-button" id="close-guide" type="button" aria-label="閉じる"><svg><use href="#i-close"/></svg></button>
+    </div>
+    <ol>
+      <li><strong>受け止める</strong><p>左右キーでパドルを動かし、ベルトの端から落ちてくるタイルを受け止めます。左右キーは押し続けると連続で移動します。↓キーを押している間、ベルト上の全タイルが加速します。パドルには5枚まで載せられます。</p></li>
+      <li><strong>そろえる</strong><p>Spaceで一番上のタイルを同じ列のプールへ落とし、下から積み上げます。同じ色を縦・横・斜めに3枚以上並べると消え、上のタイルが落ちて連鎖します。縦列が光っている間に同色を足すと、4枚・5枚まとめて消せます。</p></li>
+      <li><strong>次のウェーブへ</strong><p>画面の目標を達成すると次のウェーブに進みます。タイルを3枚取り逃すとゲーム終了です。↑キーでパドルの一番上のタイルをベルトに返せます。</p></li>
+      <li><strong>タッチ操作</strong><p>ベルトとプールの間にあるパドルラインをタップすると、その列まで移動します。プールをタップすると今の列に落とし、ベルトをタップすると投げ返します。盤面まわりの余白を長押ししている間は早送りします。</p></li>
+      <li><strong>難易度</strong><p>開始前に初級・中級・上級を選べます。難易度が高いほどタイルが速く流れ、次のタイルが早く出現し、色の種類も増えます。</p></li>
+    </ol>
+    <div class="music-credit">
+      <p>BGM by <a href="https://peritune.com/" target="_blank" rel="noopener noreferrer">PeriTune / むつき醒</a>
+        <span aria-hidden="true">・</span><a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener noreferrer">CC BY 4.0</a>
+      </p>
+      <details><summary>収録曲</summary><ul id="track-credits"></ul></details>
+    </div>
+    <button class="play-button dialog-button" id="done-guide" type="button">閉じる</button>
+  </dialog>
+  <audio id="bgm" preload="none" loop></audio>
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>
