@@ -305,6 +305,7 @@ body::before {
 .play-button:active { transform: translateY(1px); }
 .keyboard-hint { font-size: 10px; color: #b6adc9; }
 .keyboard-hint kbd { background: none; border: 0; color: #d2c6f2; padding: 0; }
+.keyboard-hint .gamepad-key { display: none; }
 .wave-goal {
   position: absolute;
   inset: 12% 0 auto;
@@ -464,7 +465,7 @@ dialog li p { color: #c0bcd7; font-size: 13px; line-height: 1.7; margin-top: 4px
   .app { width: calc(100% - 44px); }
   .game-layout { gap: 14px; }
 }
-@media (max-width: 800px) {
+@media (max-width: 800px), (orientation: landscape) and (max-height: 600px) {
   .app { width: calc(100% - 28px); }
   .topbar { min-height: 65px; }
   .brand { gap: 7px; }
@@ -531,6 +532,54 @@ dialog li p { color: #c0bcd7; font-size: 13px; line-height: 1.7; margin-top: 4px
 }
 @media (pointer: coarse) {
   .keyboard-hint { visibility: hidden; }
+}
+@media (orientation: landscape) and (max-height: 600px) {
+  .app {
+    width: min(100%, 1600px);
+    min-height: 0;
+    height: 100vh;
+    height: 100dvh;
+    padding: env(safe-area-inset-top) max(8px, env(safe-area-inset-right))
+             max(6px, env(safe-area-inset-bottom)) max(8px, env(safe-area-inset-left));
+  }
+  .topbar { min-height: 43px; }
+  .brand img { width: 27px; height: 27px; }
+  .game-layout {
+    display: grid;
+    min-height: 0;
+    grid-template-columns: clamp(76px, 13vw, 150px) minmax(0, 1fr) clamp(76px, 13vw, 150px);
+    grid-template-rows: minmax(0, 1fr);
+    gap: clamp(8px, 1.5vw, 16px);
+    padding: 6px 0 0;
+  }
+  .stage { --board-vertical-margin: .10; height: auto; min-height: 0; }
+  .telemetry, .tool-panel {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+    padding: 8px 0 0;
+  }
+  .wave-block, .tool-panel .paddle-block { display: block; }
+  .wave-number { font-size: clamp(28px, 9dvh, 48px); }
+  .objective { margin-top: 6px; }
+  .score { font-size: clamp(15px, 2.35vw, 25px); }
+  .paddle-slots { width: 100%; margin-top: 7px; gap: 3px; }
+  .paddle-slots span { height: auto; max-height: 24px; }
+  .tool-panel .help-button { display: inline-flex; align-self: flex-start; padding: 0 6px; gap: 4px; white-space: nowrap; }
+  .touch-controls, .game-footer { display: none; }
+  .stage-status { top: 12px; left: 12px; gap: 5px; }
+  .difficulty { top: 8px; right: 8px; }
+  .now-playing { right: 10px; bottom: 9px; }
+  .screen { padding: 10px 8px; gap: 3px; }
+  .screen-message { margin-bottom: 6px; }
+  .keyboard-hint { visibility: visible; }
+  .keyboard-hint .keyboard-key { display: none; }
+  .keyboard-hint .gamepad-key { display: inline-grid; }
+  dialog {
+    max-height: calc(100dvh - max(12px, env(safe-area-inset-top)) - max(12px, env(safe-area-inset-bottom)));
+    padding: 16px 20px;
+  }
 }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { transition-duration: 0s !important; }

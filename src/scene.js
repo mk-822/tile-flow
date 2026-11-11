@@ -486,8 +486,10 @@ export class StageScene {
     const right = Math.max(...projected.map(p => p.x));
     const low = Math.min(...projected.map(p => p.y));
     const high = Math.max(...projected.map(p => p.y));
-    const topInset = w < 520 ? 42 : 62;
-    const bottomInset = w < 520 ? 89 : 120;
+    const verticalMargin = getComputedStyle(this.viewport).getPropertyValue('--board-vertical-margin');
+    const verticalInset = verticalMargin ? h * Number(verticalMargin) : null;
+    const topInset = verticalInset ?? (w < 520 ? 42 : 62);
+    const bottomInset = verticalInset ?? (w < 520 ? 89 : 120);
     const usable = (h - topInset - bottomInset) / h;
     camera.zoom = Math.min((w < 520 ? 1.79 : 1.63) / (right - left), 2 * usable / (high - low));
     const desiredY = (bottomInset - topInset) / h;
