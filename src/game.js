@@ -159,20 +159,15 @@ export class Game {
     }
   }
 
-  canExtend(lane) {
-    const column = this.board[lane];
-    const tile = this.stack.at(-1);
-    if (!tile || column.length >= ROWS) return false;
-    return this.resolution?.clear?.matches.some(match => {
-      const top = match.cells.at(-1);
-      return match.kind === 'vertical' && top.lane === lane && top.row === column.length - 1 && top.tile.color === tile.color;
-    }) ?? false;
-  }
-
   applyPendingActions() {
     while (this.pendingActions.length) {
       const { action, lane } = this.pendingActions[0];
-      if (this.resolution && (action !== 'place' || !this.canExtend(lane))) return;
+      if (this.resolution) {
+        if (action !== 'place' || !this.conveyorPaused) return;
+        if (this.board[lane].length === ROWS && this.resolution.clear?.matches.some(match =>
+          match.cells.some(cell => cell.lane === lane)
+        )) return;
+      }
       this.pendingActions.shift();
       this.applyAction(action, lane);
     }
@@ -192,10 +187,14 @@ export class Game {
     const tile = this.stack.pop();
     const row = column.length;
     column.push(tile);
-    const extending = Boolean(this.resolution?.clear);
-    if (!extending) this.resolution = { remaining: PLACE_TIME, chain: 1 };
+    if (this.resolution) {
+      const landingTime = PLACE_TIME + (this.resolution.clear ? EXTRA_TILE_HIGHLIGHT : 0);
+      this.resolution.remaining = Math.max(this.resolution.remaining, landingTime);
+    } else {
+      this.resolution = { remaining: PLACE_TIME, chain: 1 };
+    }
     this.onEvent('place', { tile, from, lane, row, duration: PLACE_TIME });
-    if (extending) this.extendClear();
+    if (this.resolution.clear) this.extendClear({ tile, lane, row });
   }
 
   returnTile(lane) {
@@ -252,7 +251,7 @@ export class Game {
       return;
     }
     if (lane !== undefined) this.openingIndex++;
-    this.spawnIn = this.spawnInterval();
+    this.spawnIn += this.spawnInterval();
   }
 
   resolve() {
@@ -289,15 +288,23 @@ export class Game {
     return { matches, unique, total, progress };
   }
 
-  extendClear() {
+  extendClear(cell) {
     const { chain, clear: previous } = this.resolution;
-    const clear = this.summarizeMatches(findMatches(this.board), chain);
+    const vertical = previous.matches.find(match => {
+      const top = match.cells.at(-1);
+      return match.kind === 'vertical' && top.lane === cell.lane && top.row === cell.row - 1 &&
+        top.tile.color === cell.tile.color;
+    });
+    if (!vertical) return;
+    // Keep the current clear intact so other new lines can become the next chain.
+    const matches = previous.matches.map(match => match === vertical ? {
+      ...match, cells: [...match.cells, cell]
+    } : match);
+    const clear = this.summarizeMatches(matches, chain);
     this.score += clear.total - previous.total;
     this.progress += clear.progress - previous.progress;
     this.resolution.clear = clear;
-    this.resolution.remaining = Math.max(this.resolution.remaining, PLACE_TIME + EXTRA_TILE_HIGHLIGHT);
-    const cells = [...clear.unique.values()].filter(({ tile }) => !previous.unique.has(tile.id));
-    this.onEvent('extend', { cells });
+    this.onEvent('extend', { cells: [cell] });
   }
 
   clearMatches({ matches, unique, total }, chain) {
@@ -362,7 +369,8 @@ export class Game {
     this.applyPendingActions();
     const stopped = wasStopped || this.conveyorPaused;
     if (!stopped) this.elapsed += dt;
-    const travel = stopped ? 0 : this.beltSpeed() * dt * (fast ? FAST_MULTIPLIER : 1);
+    const beltTime = stopped ? 0 : dt * (fast ? FAST_MULTIPLIER : 1);
+    const travel = this.beltSpeed() * beltTime;
     const arrivals = [];
     let nearest;
     let nearestDistance = Infinity;
@@ -388,7 +396,7 @@ export class Game {
       if (this.phase !== 'playing') return;
     }
     if (stopped) return;
-    this.spawnIn -= dt;
+    this.spawnIn -= beltTime;
     if (this.spawnIn <= 0) this.feedBelt();
   }
 }
