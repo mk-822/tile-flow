@@ -8,7 +8,13 @@ export function readGamepad(previousStick = null) {
   } catch {
     return null;
   }
-  const pad = pads.find(candidate => candidate?.connected && candidate.mapping === 'standard');
+  let pad = pads.find(candidate => candidate?.connected && candidate.mapping === 'standard');
+  if (!pad && /\bChrome\//.test(navigator.userAgent) &&
+      (navigator.userAgentData?.platform === 'Android' || /\bAndroid\b/.test(navigator.userAgent))) {
+    // Android Chromium still fills the canonical slots for its default mapping.
+    pad = pads.find(candidate => candidate?.connected && candidate.mapping === '' &&
+      candidate.buttons.length >= 16 && candidate.axes.length >= 4);
+  }
   if (!pad) return null;
 
   const axis = pad.axes[0] ?? 0;
