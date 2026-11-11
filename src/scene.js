@@ -696,10 +696,14 @@ export class StageScene {
       case 'over':
         this.endCharge();
         break;
-      case 'clear':
+      case 'clear': {
+        const center = point(0, .22, 2);
+        const color = this.secondary.color.clone();
         this.pulse = 1;
-        this.ring(point(0, .22, 2), this.secondary.color);
+        this.ring(center, color);
+        this.ripple = { center, color, age: 0, duration: 1.3, strength: 1.2 };
         break;
+      }
       case 'blocked':
         this.shake = .08;
         break;

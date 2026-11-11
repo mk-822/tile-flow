@@ -21,10 +21,10 @@ export const TRACKS = [
 const hz = midi => 440 * 2 ** ((midi - 69) / 12);
 
 export class GameAudio {
-  constructor(player, enabled) {
+  constructor(player, enabled, volume = 1) {
     this.player = player;
-    this.player.volume = MUSIC_GAIN * MASTER_GAIN;
     this.enabled = enabled;
+    this.setVolume(volume);
     this.running = false;
     this.beat = 0;
     this.wave = 1;
@@ -41,12 +41,13 @@ export class GameAudio {
         if (!Audio) return;
         this.ctx = new Audio();
         this.master = this.ctx.createGain();
-        this.master.gain.value = MASTER_GAIN;
+        this.master.gain.value = MASTER_GAIN * this.volume;
         const limiter = this.ctx.createDynamicsCompressor();
         this.master.connect(limiter).connect(this.ctx.destination);
         const music = this.ctx.createGain();
         music.gain.value = MUSIC_GAIN;
         this.ctx.createMediaElementSource(this.player).connect(music).connect(this.master);
+        this.mediaConnected = true;
         this.player.volume = 1;
       }
       if (this.ctx.state === 'suspended') await this.ctx.resume();
@@ -58,8 +59,15 @@ export class GameAudio {
   setEnabled(enabled) {
     this.enabled = enabled;
     if (enabled) void this.unlock();
-    this.master?.gain.setTargetAtTime(enabled ? MASTER_GAIN : 0, this.ctx.currentTime, .045);
+    this.setVolume(this.volume);
     this.syncPlayback();
+  }
+
+  setVolume(volume) {
+    this.volume = Number.isFinite(volume) ? Math.max(0, Math.min(1, volume)) : 1;
+    const gain = MASTER_GAIN * this.volume;
+    this.master?.gain.setTargetAtTime(this.enabled ? gain : 0, this.ctx.currentTime, .045);
+    if (!this.mediaConnected) this.player.volume = gain * MUSIC_GAIN;
   }
 
   setRunning(running, wave = this.wave) {

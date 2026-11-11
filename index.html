@@ -30,6 +30,7 @@
         <h1>TILE <span>FLOW</span></h1>
       </div>
       <div class="top-actions" aria-label="ゲーム設定">
+        <input class="volume-slider" id="volume" type="range" min="0" max="100" value="100" aria-label="音量" title="音量">
         <button class="icon-button" id="sound" type="button" aria-label="サウンド" aria-pressed="true" title="サウンド (M)"><svg><use href="#i-sound"/></svg></button>
         <button class="icon-button" id="pause" type="button" aria-label="一時停止" title="一時停止 (Esc)" disabled><svg><use href="#i-pause"/></svg></button>
         <button class="icon-button fullscreen" id="fullscreen" type="button" aria-label="全画面" aria-pressed="false" title="全画面"><svg><use href="#i-full"/></svg></button>
@@ -62,10 +63,11 @@
         <div id="viewport" class="viewport"></div>
         <div class="stage-reticle" aria-hidden="true"></div>
         <div class="stage-status"><span></span><span id="stage-status">STANDBY</span></div>
+        <div class="wave-goal" id="wave-goal" aria-hidden="true"><span id="wave-goal-number"></span><strong id="wave-goal-text"></strong></div>
         <div id="announce" class="announce" aria-hidden="true"></div>
         <div class="now-playing" id="now-playing" role="status"><span aria-hidden="true">♪</span> <span id="track-name"></span></div>
         <div class="screen" id="screen">
-          <p class="screen-title" id="screen-title" hidden></p>
+          <p class="screen-title" id="screen-title" hidden><span id="screen-title-text"></span><span class="raster" data-text="GAME OVER" aria-hidden="true"></span></p>
           <p class="screen-message" id="screen-message" hidden></p>
           <button type="button" class="play-button" id="play"><svg><use href="#i-play"/></svg><span id="play-label">START WAVE</span></button>
           <p class="keyboard-hint" id="keyboard-hint"><kbd>Enter</kbd> でスタート</p>
@@ -122,6 +124,7 @@
       <li><strong>そろえる</strong><p>Spaceで一番上のタイルを同じ列のプールへ落とし、下から積み上げます。同じ色を縦・横・斜めに3枚以上並べると消え、上のタイルが落ちて連鎖します。縦列が光っている間に同色を足すと、4枚・5枚まとめて消せます。</p></li>
       <li><strong>次のウェーブへ</strong><p>画面の目標を達成すると次のウェーブに進みます。タイルを3枚取り逃すとゲーム終了です。↑キーでパドルの一番上のタイルをベルトに返せます。</p></li>
       <li><strong>タッチ操作</strong><p>ベルトとプールの間にあるパドルラインをタップすると、その列まで移動します。プールをタップすると今の列に落とし、ベルトをタップすると投げ返します。盤面まわりの余白を長押ししている間は早送りします。</p></li>
+      <li><strong>ゲームパッド</strong><p>十字キーの左右か左スティックでパドルを動かします。下側のボタン（A / ×）で決定・タイルを落とす、上側のボタン（Y / △）か十字キーの↑で投げ返す、RT / R2 か十字キーの↓の長押しで早送り、Start / Options で一時停止・再開します。</p></li>
       <li><strong>難易度</strong><p>開始前に初級・中級・上級を選べます。難易度が高いほどタイルが速く流れ、次のタイルが早く出現し、色の種類も増えます。</p></li>
     </ol>
     <div class="music-credit">

@@ -50,6 +50,14 @@ body::before {
 .brand h1 { font-size: clamp(24px, 2.45vw, 38px); line-height: 1; letter-spacing: -.05em; font-weight: 760; }
 .brand span { color: var(--lavender); font-weight: 360; letter-spacing: .18em; font-size: .65em; margin-left: .35em; }
 .top-actions { display: flex; align-items: center; gap: 9px; }
+.volume-slider {
+  width: clamp(54px, 8vw, 96px);
+  height: 34px;
+  margin: 0 3px 0 0;
+  accent-color: var(--lavender);
+  cursor: pointer;
+}
+.volume-slider:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; border-radius: 4px; }
 .icon-button {
   width: 41px;
   height: 41px;
@@ -219,7 +227,61 @@ body::before {
   background: #070617bf;
   backdrop-filter: blur(6px);
 }
-.screen-title { font-size: clamp(26px, 4vw, 56px); font-weight: 720; letter-spacing: .08em; text-shadow: 0 0 30px #b695ff8a; }
+.screen-title { position: relative; font-size: clamp(26px, 4vw, 56px); font-weight: 720; letter-spacing: .08em; text-shadow: 0 0 30px #b695ff8a; }
+.stage[data-phase="clear"] .screen {
+  backdrop-filter: none;
+  animation: clear-backdrop 1.35s both;
+}
+.stage[data-phase="clear"] .screen-title { animation: wave-clear 1.65s ease-in-out both; }
+.stage[data-phase="over"] .screen-title { animation: game-over-in .8s cubic-bezier(.18, .6, .27, 1) both; }
+.stage[data-phase="over"] #screen-title-text {
+  display: block;
+  animation: game-over-slices .8s steps(1) both;
+}
+.raster::before, .raster::after {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.stage[data-phase="over"] .raster::before, .stage[data-phase="over"] .raster::after {
+  content: attr(data-text);
+  animation: game-over-raster .8s steps(1) both;
+}
+.raster::before {
+  --offset: 10px;
+  color: #b1efff;
+  clip-path: polygon(0 20%, 100% 20%, 100% 33%, 0 33%, 0 50%, 100% 50%, 100% 62%, 0 62%);
+}
+.raster::after {
+  --offset: -10px;
+  color: #e5b3ff;
+  clip-path: polygon(0 33%, 100% 33%, 100% 50%, 0 50%, 0 62%, 100% 62%, 100% 74%, 0 74%);
+}
+@keyframes clear-backdrop {
+  0%, 36% { background-color: transparent; }
+  100% { background-color: #070617bf; }
+}
+@keyframes wave-clear {
+  0%, 100% { opacity: 0; }
+  26%, 65% { opacity: 1; }
+}
+@keyframes game-over-in {
+  from { opacity: 0; transform: translateY(1lh); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes game-over-slices {
+  from { clip-path: polygon(0 0, 100% 0, 100% 20%, 0 20%, 0 74%, 100% 74%, 100% 100%, 0 100%); }
+  75%, 100% { clip-path: none; }
+}
+@keyframes game-over-raster {
+  0% { opacity: .8; transform: translateX(var(--offset)); }
+  12% { transform: translateX(calc(-.6 * var(--offset))); }
+  25% { transform: translateX(calc(.75 * var(--offset))); }
+  37% { opacity: .65; transform: translateX(calc(-.5 * var(--offset))); }
+  50% { transform: translateX(calc(.4 * var(--offset))); }
+  62% { opacity: .4; transform: translateX(calc(-.25 * var(--offset))); }
+  75%, 100% { opacity: 0; transform: none; }
+}
 .screen-message { color: #d2cdeb; font-size: 13px; margin-bottom: 14px; text-align: center; }
 .play-button {
   pointer-events: auto;
@@ -243,6 +305,25 @@ body::before {
 .play-button:active { transform: translateY(1px); }
 .keyboard-hint { font-size: 10px; color: #b6adc9; }
 .keyboard-hint kbd { background: none; border: 0; color: #d2c6f2; padding: 0; }
+.wave-goal {
+  position: absolute;
+  inset: 12% 0 auto;
+  display: grid;
+  justify-items: center;
+  gap: 5px;
+  opacity: 0;
+  pointer-events: none;
+  text-align: center;
+  text-shadow: 0 0 22px #9e6dff, 0 2px 8px #070416;
+}
+.wave-goal > span { color: var(--cyan); font: 700 clamp(11px, 1.7vw, 17px)/1.2 var(--mono); letter-spacing: .21em; }
+.wave-goal > strong { color: #f4ebff; font-size: clamp(19px, 3.2vw, 37px); line-height: 1.2; }
+.stage[data-phase="playing"] .wave-goal.show { animation: wave-goal 1.666667s ease-in-out both; }
+@keyframes wave-goal {
+  0% { opacity: 0; transform: translateX(60%); }
+  20%, 80% { opacity: 1; transform: none; }
+  100% { opacity: 0; transform: translateX(-60%); }
+}
 .announce {
   position: absolute;
   top: 22%;
@@ -389,6 +470,7 @@ dialog li p { color: #c0bcd7; font-size: 13px; line-height: 1.7; margin-top: 4px
   .brand { gap: 7px; }
   .brand img { width: 33px; height: 33px; }
   .top-actions { gap: 5px; }
+  .volume-slider { width: 54px; }
   .icon-button { width: 35px; height: 35px; }
   .game-layout { display: flex; flex-direction: column; align-items: stretch; gap: 10px; padding-block: 11px; }
   .telemetry {
@@ -452,8 +534,14 @@ dialog li p { color: #c0bcd7; font-size: 13px; line-height: 1.7; margin-top: 4px
 }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { transition-duration: 0s !important; }
+  .stage[data-phase="playing"] .wave-goal.show { animation-name: quiet-wave-goal; }
+  .stage[data-phase="over"] .screen-title { animation-name: quiet-game-over; }
+  .stage[data-phase="over"] #screen-title-text { animation: none; }
+  .stage[data-phase="over"] .raster::before, .stage[data-phase="over"] .raster::after { display: none; }
   .announce.show { animation-name: quiet-announce; }
   .now-playing.show { animation-name: quiet-track; transform: none; }
+  @keyframes quiet-wave-goal { 0%, 100% { opacity: 0; } 20%, 80% { opacity: 1; } }
+  @keyframes quiet-game-over { from { opacity: 0; } to { opacity: 1; } }
   @keyframes quiet-track { 0%, 100% { opacity: 0; } 8%, 89% { opacity: 1; } }
   @keyframes quiet-announce { 0%, 90% { opacity: 1; } 100% { opacity: 0; } }
 }

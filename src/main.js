@@ -5,6 +5,7 @@ import './style.css';
 import { DIFFICULTIES, Game, LANES, MAX_DROPS, TILES } from './game.js';
 import { StageScene } from './scene.js';
 import { GameAudio, TRACKS } from './audio.js';
+import { readGamepad } from './gamepad.js';
 
 const byId = id => document.getElementById(id);
 const viewport = byId('viewport');
@@ -15,6 +16,7 @@ const trackName = byId('track-name');
 const screen = byId('screen');
 const play = byId('play');
 const difficulty = byId('difficulty');
+const volume = byId('volume');
 const sound = byId('sound');
 const pause = byId('pause');
 const fullscreen = byId('fullscreen');
@@ -39,6 +41,8 @@ let fastPointer = null;
 let lastBeat = 0;
 let dragPointer = null;
 let directionButton = null;
+let padDirection = null;
+let previousPad = null;
 let destination = null;
 let movement = null;
 let moveIn = 0;
@@ -47,7 +51,7 @@ const moveKeys = new Set();
 const queuedMoves = [];
 const fastKeys = new Set();
 const gestures = new Map();
-const audio = new GameAudio(byId('bgm'), readStorage('sound') !== 'off');
+const audio = new GameAudio(byId('bgm'), readStorage('sound') !== 'off', Number(readStorage('volume') ?? 100) / 100);
 let best = Number(readStorage('best')) || 0;
 const game = new Game(onGameEvent);
 
@@ -95,10 +99,11 @@ function updateScreen() {
   const status = { ready: 'STANDBY', playing: 'IN PLAY', paused: 'PAUSED', clear: 'WAVE CLEAR', over: 'GAME OVER', error: 'WEBGL ERROR' };
   stageStatus.textContent = status[phase];
   screen.hidden = phase === 'playing';
+  if (phase !== 'playing') byId('wave-goal').classList.remove('show');
   difficulty.hidden = phase !== 'ready' && phase !== 'over';
   const title = byId('screen-title');
   title.hidden = phase === 'ready' || phase === 'playing';
-  title.textContent = status[phase];
+  byId('screen-title-text').textContent = status[phase];
   const messages = {
     clear: `ウェーブ ${game.wave} 達成　／　SCORE ${scoreText(game.score)}`,
     over: `${endReason === 'full' ? '全てのマスが埋まりました' : 'タイルを3枚落としました'}　／　SCORE ${scoreText(game.score)}`,
@@ -129,9 +134,33 @@ function announce(text) {
   display.classList.add('show');
 }
 
+function showWaveGoal() {
+  const { goal, target } = game.waveData;
+  const count = target.toLocaleString('ja-JP');
+  const text = {
+    match: `FLOWを${count}回`,
+    horizontal: `横のFLOWを${count}回`,
+    diagonal: `斜めのFLOWを${count}回`,
+    tiles: `タイルを${count}枚さばく`,
+    points: `${count}点を獲得`
+  }[goal];
+  byId('wave-goal-number').textContent = `WAVE ${String(game.wave).padStart(2, '0')}`;
+  byId('wave-goal-text').textContent = text;
+  const banner = byId('wave-goal');
+  banner.classList.remove('show');
+  void banner.offsetWidth;
+  banner.classList.add('show');
+  byId('status-live').textContent = `ウェーブ ${game.wave}、ノルマは${text}`;
+}
+
 function updateSound() {
   sound.setAttribute('aria-pressed', audio.enabled);
   sound.querySelector('use').setAttribute('href', audio.enabled ? '#i-sound' : '#i-mute');
+}
+
+function updateVolume() {
+  volume.value = Math.round(audio.volume * 100);
+  volume.setAttribute('aria-valuetext', `${volume.value}%`);
 }
 
 function toggleSound() {
@@ -151,6 +180,7 @@ function releaseInputs() {
   fastPointer = null;
   dragPointer = null;
   directionButton = null;
+  padDirection = null;
   destination = null;
   showFast(false);
 }
@@ -194,7 +224,7 @@ function onGameEvent(type, data) {
   if (type === 'start') {
     byId('announce').classList.remove('show');
     if (data.newRun || data.refillDrops) showTrack(audio.nextTrack().title);
-    byId('status-live').textContent = `ウェーブ ${game.wave}、${game.waveData.label} ${game.waveData.target}`;
+    showWaveGoal();
   }
   if (type === 'over') {
     endReason = data.reason;
@@ -228,10 +258,57 @@ function runAction(action) {
 }
 
 function syncMovement() {
-  const next = keys[[...moveKeys].at(-1)] ?? null;
+  const next = keys[[...moveKeys].at(-1)] ?? padDirection;
   if (next === movement) return;
   movement = next;
   repeatIn = movement ? KEY_REPEAT_DELAY : 0;
+}
+
+function queueMove(direction) {
+  destination = null;
+  if (queuedMoves.length < LANES - 1) queuedMoves.push(direction);
+  moveHeld();
+}
+
+function updateGamepad() {
+  const previous = previousPad;
+  const pad = readGamepad(previous?.stick);
+  previousPad = pad;
+  if (!document.hasFocus()) return false;
+  const confirm = pad?.confirm && !previous?.confirm;
+  const pausePressed = pad?.pause && !previous?.pause;
+  const direction = pad?.direction ?? null;
+  const directionPressed = direction && direction !== previous?.direction;
+
+  if (guide.open) {
+    if (confirm || pausePressed || (pad?.cancel && !previous?.cancel)) guide.close();
+    return false;
+  }
+  if (game.phase !== 'playing') {
+    if (directionPressed && !difficulty.hidden) {
+      const choices = [...difficulty.querySelectorAll('input')];
+      const index = choices.findIndex(choice => choice.checked);
+      const next = choices[index + (direction === 'left' ? -1 : 1)];
+      if (next) {
+        next.checked = true;
+        saveStorage('difficulty', next.value);
+      }
+    }
+    if (confirm || pausePressed) activate();
+    return false;
+  }
+  if (pausePressed) {
+    game.pause();
+    return false;
+  }
+  if (direction !== padDirection) {
+    padDirection = direction;
+    syncMovement();
+    if (directionPressed) queueMove(direction);
+  }
+  if (confirm) runAction('place');
+  if (pad?.throw && !previous?.throw) runAction('throw');
+  return pad?.fast === true;
 }
 
 function movePaddle(direction) {
@@ -272,6 +349,11 @@ if (Object.hasOwn(DIFFICULTIES, savedDifficulty)) {
   difficulty.querySelector(`[value="${savedDifficulty}"]`).checked = true;
 }
 difficulty.addEventListener('change', event => saveStorage('difficulty', event.target.value));
+volume.addEventListener('input', () => {
+  audio.setVolume(volume.valueAsNumber / 100);
+  updateVolume();
+  saveStorage('volume', volume.value);
+});
 sound.addEventListener('click', toggleSound);
 pause.addEventListener('click', () => game.pause());
 byId('help').addEventListener('click', showGuide);
@@ -302,10 +384,22 @@ document.addEventListener('fullscreenchange', () => {
   fullscreen.setAttribute('aria-pressed', Boolean(document.fullscreenElement));
 });
 
+// Some browsers require a page gesture to start audio after a gamepad-only start.
+for (const type of ['pointerup', 'keydown']) {
+  window.addEventListener(type, event => {
+    if (!event.isTrusted || !audio.enabled || !audio.running) return;
+    if (audio.player.paused || audio.ctx?.state === 'suspended') {
+      void audio.unlock();
+      audio.syncPlayback();
+    }
+  });
+}
+
 window.addEventListener('keydown', event => {
   if (guide.open || event.ctrlKey || event.metaKey || event.altKey) return;
   const onButton = event.target instanceof HTMLButtonElement;
-  if (event.code === 'Enter' && game.phase !== 'playing' && !onButton && !event.repeat) {
+  const onVolume = event.target === volume;
+  if (event.code === 'Enter' && game.phase !== 'playing' && !onButton && !onVolume && !event.repeat) {
     event.preventDefault();
     void activate();
   }
@@ -315,15 +409,13 @@ window.addEventListener('keydown', event => {
   }
   if (event.code === 'KeyM' && !event.repeat) toggleSound();
   const action = keys[event.code];
-  if (!action || game.phase !== 'playing' || (event.code === 'Space' && onButton)) return;
+  if (!action || game.phase !== 'playing' || onVolume || (event.code === 'Space' && onButton)) return;
   event.preventDefault();
   if (action === 'left' || action === 'right') {
     if (!event.repeat && !moveKeys.has(event.code)) {
       moveKeys.add(event.code);
-      destination = null;
       syncMovement();
-      if (queuedMoves.length < LANES - 1) queuedMoves.push(action);
-      moveHeld();
+      queueMove(action);
     }
   } else if (action === 'fast') {
     if (!event.repeat) fastKeys.add(event.code);
@@ -422,9 +514,10 @@ function frame(now) {
   lastTime = now;
   moveIn -= dt;
   repeatIn = Math.max(0, repeatIn - dt);
+  const padFast = updateGamepad();
   moveHeld();
   moveIn = Math.max(0, moveIn);
-  const fast = fastPointer !== null || fastKeys.size > 0 || [...gestures.values()].some(pointer =>
+  const fast = padFast || fastPointer !== null || fastKeys.size > 0 || [...gestures.values()].some(pointer =>
     pointer.action === null && !pointer.moved && now - pointer.started >= HOLD_DELAY
   );
   game.step(dt, fast);
@@ -451,5 +544,6 @@ try {
   console.error(error);
 }
 updateHUD();
+updateVolume();
 updateSound();
 updateScreen();
