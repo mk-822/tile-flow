@@ -63,6 +63,12 @@ npm run dev
 
 ターミナルに表示されるローカルURLを開きます。配信用ファイルは `npm run build` で `dist/` に出力され、`npm run preview` で確認できます。`main` への更新は GitHub Actions でビルドされ、GitHub Pages に反映されます。
 
+## ライセンス
+
+- Tile Flow独自のコード・ドキュメント・ロゴとアイコンはMITライセンスです。 [ライセンス本文](LICENSE)
+- three.jsはMIT、GeistとSpace MonoはSIL Open Font License 1.1です。配信用ビルドには、同梱ライブラリとフォントの著作権表記およびライセンス本文が付属します。 [配信用ビルドのライセンス一覧](https://mk-822.github.io/tile-flow/third-party-licenses.md)
+- 同梱BGMは、PeriTune / むつき醒の2026年2月以前に公開された楽曲です。各曲にCC BY 4.0が適用されます。 [BGMのライセンス](public/bgm/LICENSE.txt) [PeriTuneの利用案内](https://peritune.com/about/)
+
 ## BGM
 
 ゲーム開始時と、WAVE 5・10・15…をクリアして次のウェーブに進むときに、全15曲からシャッフルした順番でBGMが切り替わります。

@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "description": "A 3D tile-matching arcade puzzle with reactive light and sound",
+  "license": "MIT",
   "scripts": {
     "dev": "vite --host 127.0.0.1",
     "build": "vite build",
