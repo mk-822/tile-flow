@@ -59,7 +59,6 @@ const fastKeys = new Set();
 const gestures = new Map();
 const audio = new GameAudio(byId('bgm'), readStorage('sound') !== 'off', Number(readStorage('volume') ?? 100) / 100);
 const bestScores = Object.fromEntries(difficultyKeys.map(key => [key, Number(readStorage(`best.${key}`)) || 0]));
-const legacyBest = Number(readStorage('best')) || 0;
 const savedDifficulty = readStorage('difficulty');
 let startColumn = difficultyKeys.indexOf(Object.hasOwn(DIFFICULTIES, savedDifficulty) ? savedDifficulty : 'normal');
 let startRow = 0;
@@ -150,7 +149,6 @@ function buildSelection() {
     skipButtons.push(button);
     skipGrid.append(button);
   });
-  byId('legacy-best').textContent = `旧ベスト ${scoreText(legacyBest)}（難易度記録なし）`;
 }
 
 function markChoice(buttons, selected) {
@@ -236,7 +234,7 @@ function updateScreen() {
   waveSelection.hidden = !selectStart && !selectSkip;
   startGrid.hidden = !selectStart;
   skipGrid.hidden = !selectSkip;
-  byId('legacy-best').hidden = !selectStart || !legacyBest;
+  byId('start-heading').hidden = !selectStart;
   if (selectStart || selectSkip) stage.dataset.select = selectStart ? 'start' : 'skip';
   else delete stage.dataset.select;
   if (selectStart) markChoice(startButtons, startRow * difficultyKeys.length + startColumn);
