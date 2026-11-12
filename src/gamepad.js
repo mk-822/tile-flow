@@ -25,13 +25,16 @@ export function readGamepad(previousStick = null) {
   const left = pressed(14);
   const right = pressed(15);
   const direction = left === right ? stick : left ? 'left' : 'right';
+  const up = pressed(12);
+  const down = pressed(13);
 
   return {
     stick, direction,
+    menuVertical: Number(down) - Number(up),
     confirm: pressed(0),
     cancel: pressed(1),
     pause: pressed(9),
-    throw: pressed(3) || pressed(12),
-    fast: pressed(13) || pressed(7)
+    throw: pressed(3) || up,
+    fast: down || pressed(7)
   };
 }

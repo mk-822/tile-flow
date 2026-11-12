@@ -2,7 +2,7 @@ import '@fontsource-variable/geist/wght.css';
 import '@fontsource/space-mono/latin-400.css';
 import '@fontsource/space-mono/latin-700.css';
 import './style.css';
-import { DIFFICULTIES, Game, LANES, MAX_DROPS, TILES } from './game.js';
+import { DIFFICULTIES, Game, LANES, TILES, WAVE_CHOICES } from './game.js';
 import { StageScene } from './scene.js';
 import { GameAudio, TRACKS } from './audio.js';
 import { readGamepad } from './gamepad.js';
@@ -15,7 +15,9 @@ const nowPlaying = byId('now-playing');
 const trackName = byId('track-name');
 const screen = byId('screen');
 const play = byId('play');
-const difficulty = byId('difficulty');
+const waveSelection = byId('wave-selection');
+const startGrid = byId('start-grid');
+const skipGrid = byId('skip-grid');
 const volume = byId('volume');
 const sound = byId('sound');
 const pause = byId('pause');
@@ -29,6 +31,10 @@ const keys = {
   ArrowLeft: 'left', KeyA: 'left', ArrowRight: 'right', KeyD: 'right',
   Space: 'place', ArrowUp: 'throw', KeyW: 'throw', ArrowDown: 'fast', KeyS: 'fast'
 };
+const menuDirections = {
+  ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1]
+};
+const difficultyKeys = Object.keys(DIFFICULTIES);
 const MOVE_INTERVAL = 1 / 7;
 const KEY_REPEAT_DELAY = .28;
 const DRAG_SLOP = 10;
@@ -52,7 +58,15 @@ const queuedMoves = [];
 const fastKeys = new Set();
 const gestures = new Map();
 const audio = new GameAudio(byId('bgm'), readStorage('sound') !== 'off', Number(readStorage('volume') ?? 100) / 100);
-let best = Number(readStorage('best')) || 0;
+const bestScores = Object.fromEntries(difficultyKeys.map(key => [key, Number(readStorage(`best.${key}`)) || 0]));
+const legacyBest = Number(readStorage('best')) || 0;
+const savedDifficulty = readStorage('difficulty');
+let startColumn = difficultyKeys.indexOf(Object.hasOwn(DIFFICULTIES, savedDifficulty) ? savedDifficulty : 'normal');
+let startRow = 0;
+let skipChoice = 0;
+const startButtons = [];
+const skipButtons = [];
+const bestLabels = [];
 const game = new Game(onGameEvent);
 
 function readStorage(key) {
@@ -68,6 +82,120 @@ function saveStorage(key, value) {
   try { localStorage.setItem(`tile-flow.${key}`, value); } catch { /* Storage can be disabled. */ }
 }
 
+function bonusText(bonus) {
+  return `${bonus.toLocaleString('ja-JP')} BONUS`;
+}
+
+function choiceLabel(wave, { drops, bonus }) {
+  return `WAVE ${wave}、DROP ${drops}${bonus ? `、${bonusText(bonus)}` : ''}`;
+}
+
+function makeChoice(text, select) {
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.className = 'wave-choice';
+  button.setAttribute('role', 'radio');
+  const label = document.createElement('span');
+  label.textContent = text;
+  button.append(label);
+  button.addEventListener('click', select);
+  return button;
+}
+
+function makeReward({ drops, bonus }) {
+  const reward = document.createElement('span');
+  reward.className = 'wave-reward';
+  const limit = document.createElement('span');
+  limit.textContent = `DROP ${drops}`;
+  reward.append(limit);
+  if (bonus) {
+    const points = document.createElement('strong');
+    points.textContent = bonusText(bonus);
+    reward.append(points);
+  }
+  return reward;
+}
+
+function buildSelection() {
+  for (const key of difficultyKeys) {
+    const header = document.createElement('div');
+    header.className = 'difficulty-heading';
+    const label = document.createElement('span');
+    label.textContent = DIFFICULTIES[key].label;
+    const best = document.createElement('small');
+    bestLabels.push(best);
+    header.append(label, best);
+    startGrid.append(header);
+  }
+  const heading = document.createElement('span');
+  heading.className = 'reward-heading';
+  heading.textContent = 'DROP / BONUS';
+  startGrid.append(heading);
+
+  WAVE_CHOICES.forEach((choice, row) => {
+    const wave = 1 + choice.skip;
+    difficultyKeys.forEach((key, column) => {
+      const button = makeChoice(wave, () => chooseStart(column, row));
+      button.setAttribute('aria-label', `${DIFFICULTIES[key].label}、${choiceLabel(wave, choice)}`);
+      startButtons.push(button);
+      startGrid.append(button);
+    });
+    startGrid.append(makeReward(choice));
+
+    const button = makeChoice('', () => chooseSkip(row));
+    const distance = document.createElement('small');
+    distance.className = 'skip-distance';
+    distance.textContent = choice.skip ? `${choice.skip} WAVE SKIP` : '次のWAVE';
+    button.append(distance, makeReward(choice));
+    skipButtons.push(button);
+    skipGrid.append(button);
+  });
+  byId('legacy-best').textContent = `旧ベスト ${scoreText(legacyBest)}（難易度記録なし）`;
+}
+
+function markChoice(buttons, selected) {
+  const moveFocus = buttons.includes(document.activeElement);
+  buttons.forEach((button, index) => {
+    const checked = index === selected;
+    button.setAttribute('aria-checked', checked);
+    button.tabIndex = checked ? 0 : -1;
+  });
+  if (moveFocus) buttons[selected].focus({ preventScroll: true });
+}
+
+function chooseStart(column, row) {
+  if (column !== startColumn) saveStorage('difficulty', difficultyKeys[column]);
+  startColumn = column;
+  startRow = row;
+  markChoice(startButtons, row * difficultyKeys.length + column);
+  updateBest();
+}
+
+function chooseSkip(index) {
+  skipChoice = index;
+  markChoice(skipButtons, index);
+}
+
+function moveSelection(horizontal, vertical) {
+  if (waveSelection.hidden) return false;
+  if (!startGrid.hidden) {
+    const column = Math.max(0, Math.min(difficultyKeys.length - 1, startColumn + horizontal));
+    const row = Math.max(0, Math.min(WAVE_CHOICES.length - 1, startRow + vertical));
+    chooseStart(column, row);
+  } else if (horizontal) {
+    chooseSkip(Math.max(0, Math.min(WAVE_CHOICES.length - 1, skipChoice + horizontal)));
+  }
+  return true;
+}
+
+function updateBest() {
+  const key = game.phase === 'ready' ? difficultyKeys[startColumn] : game.difficultyKey;
+  byId('best').textContent = scoreText(bestScores[key]);
+  difficultyKeys.forEach((difficulty, column) => {
+    bestLabels[column].textContent = `BEST ${scoreText(bestScores[difficulty])}`;
+  });
+}
+
 function updateHUD() {
   byId('wave-number').textContent = String(game.wave).padStart(2, '0');
   byId('wave-name').textContent = game.waveData.title;
@@ -78,9 +206,12 @@ function updateHUD() {
   byId('goal-track').setAttribute('aria-valuemax', game.waveData.target);
   byId('goal-track').setAttribute('aria-valuenow', progress);
   byId('score').textContent = scoreText(game.score);
-  byId('best').textContent = scoreText(best);
-  dropSlots.forEach((slot, i) => slot.classList.toggle('lost', i >= MAX_DROPS - game.drops));
-  byId('drops').setAttribute('aria-label', `落とせるタイル 残り${MAX_DROPS - game.drops}枚`);
+  updateBest();
+  dropSlots.forEach((slot, i) => {
+    slot.hidden = i >= game.dropLimit;
+    slot.classList.toggle('lost', i >= game.dropsRemaining);
+  });
+  byId('drops').setAttribute('aria-label', `落とせるタイル 残り${game.dropsRemaining}枚`);
   const stack = game.stack.map(tile => TILES[tile.color]);
   paddleSlots.forEach((slot, i) => {
     const tile = stack[i];
@@ -100,20 +231,42 @@ function updateScreen() {
   stageStatus.textContent = status[phase];
   screen.hidden = phase === 'playing';
   if (phase !== 'playing') byId('wave-goal').classList.remove('show');
-  difficulty.hidden = phase !== 'ready' && phase !== 'over';
+  const selectStart = phase === 'ready' || phase === 'over';
+  const selectSkip = phase === 'clear' && game.canSkipWaves;
+  waveSelection.hidden = !selectStart && !selectSkip;
+  startGrid.hidden = !selectStart;
+  skipGrid.hidden = !selectSkip;
+  byId('legacy-best').hidden = !selectStart || !legacyBest;
+  if (selectStart || selectSkip) stage.dataset.select = selectStart ? 'start' : 'skip';
+  else delete stage.dataset.select;
+  if (selectStart) markChoice(startButtons, startRow * difficultyKeys.length + startColumn);
+  if (selectSkip) {
+    WAVE_CHOICES.forEach((choice, index) => {
+      const wave = game.wave + 1 + choice.skip;
+      const button = skipButtons[index];
+      button.firstElementChild.textContent = `WAVE ${wave}`;
+      button.setAttribute('aria-label', choiceLabel(wave, choice));
+    });
+    chooseSkip(0);
+  }
   const title = byId('screen-title');
   title.hidden = phase === 'ready' || phase === 'playing';
+  byId('screen-summary').hidden = title.hidden;
   byId('screen-title-text').textContent = status[phase];
   const messages = {
     clear: `ウェーブ ${game.wave} 達成　／　SCORE ${scoreText(game.score)}`,
-    over: `${endReason === 'full' ? '全てのマスが埋まりました' : 'タイルを3枚落としました'}　／　SCORE ${scoreText(game.score)}`,
+    over: `${endReason === 'full' ? '全てのマスが埋まりました' : `タイルを${game.dropLimit}枚落としました`}　／　SCORE ${scoreText(game.score)}`,
     error: '3D描画を開始できませんでした。WebGL 2を利用できるブラウザで開いてください。'
   };
   const message = byId('screen-message');
   message.hidden = !messages[phase];
   message.textContent = messages[phase] ?? '';
+  const bonus = byId('wave-bonus');
+  bonus.hidden = phase !== 'clear' || !game.waveBonus;
+  bonus.textContent = game.waveBonus ? `+${bonusText(game.waveBonus)}` : '';
   byId('play-label').textContent = { ready: 'START WAVE', paused: 'RESUME', clear: 'NEXT WAVE', over: 'PLAY AGAIN' }[phase] ?? '';
   play.hidden = phase === 'error';
+  byId('screen-actions').hidden = phase === 'error';
   byId('keyboard-hint').hidden = phase === 'error';
   byId('keyboard-hint').lastChild.textContent = {
     ready: ' でスタート', paused: ' で再開', clear: ' で次へ', over: ' でもう一度'
@@ -204,9 +357,9 @@ function onGameEvent(type, data) {
     return;
   }
   scene.event(type, data, game);
-  if (game.score > best) {
-    best = game.score;
-    saveStorage('best', best);
+  if (game.score > bestScores[game.difficultyKey]) {
+    bestScores[game.difficultyKey] = game.score;
+    saveStorage(`best.${game.difficultyKey}`, game.score);
   }
   if (type === 'match') {
     let label = 'FLOW';
@@ -218,7 +371,7 @@ function onGameEvent(type, data) {
   }
   if (type === 'miss') {
     announce('TILE MISSED');
-    byId('status-live').textContent = `タイルを落としました。残り${MAX_DROPS - game.drops}枚。`;
+    byId('status-live').textContent = `タイルを落としました。残り${game.dropsRemaining}枚。`;
   }
   if (type === 'blocked') announce('FULL');
   if (type === 'start') {
@@ -230,7 +383,9 @@ function onGameEvent(type, data) {
     endReason = data.reason;
     byId('status-live').textContent = `ゲーム終了。スコア ${game.score}`;
   }
-  if (type === 'clear') byId('status-live').textContent = `ウェーブ ${game.wave} 達成`;
+  if (type === 'clear') {
+    byId('status-live').textContent = `ウェーブ ${game.wave} 達成${game.waveBonus ? `、ボーナス ${game.waveBonus}点` : ''}`;
+  }
   if (['start', 'playing', 'paused', 'over', 'clear'].includes(type)) {
     releaseInputs();
     updateScreen();
@@ -246,7 +401,7 @@ function activate() {
   if (!scene || game.phase === 'playing') return;
   void audio.unlock();
   if (game.phase === 'paused') game.pause();
-  else game.begin(difficulty.querySelector(':checked')?.value);
+  else game.begin(difficultyKeys[startColumn], game.phase === 'clear' ? skipChoice : startRow);
 }
 
 function runAction(action) {
@@ -285,15 +440,9 @@ function updateGamepad() {
     return false;
   }
   if (game.phase !== 'playing') {
-    if (directionPressed && !difficulty.hidden) {
-      const choices = [...difficulty.querySelectorAll('input')];
-      const index = choices.findIndex(choice => choice.checked);
-      const next = choices[index + (direction === 'left' ? -1 : 1)];
-      if (next) {
-        next.checked = true;
-        saveStorage('difficulty', next.value);
-      }
-    }
+    const vertical = pad?.menuVertical ?? 0;
+    const verticalPressed = vertical !== (previous?.menuVertical ?? 0) ? vertical : 0;
+    if (directionPressed || verticalPressed) moveSelection(directionPressed ? (direction === 'left' ? -1 : 1) : 0, verticalPressed);
     if (confirm || pausePressed) activate();
     return false;
   }
@@ -344,11 +493,7 @@ function showGuide() {
 }
 
 play.addEventListener('click', activate);
-const savedDifficulty = readStorage('difficulty');
-if (Object.hasOwn(DIFFICULTIES, savedDifficulty)) {
-  difficulty.querySelector(`[value="${savedDifficulty}"]`).checked = true;
-}
-difficulty.addEventListener('change', event => saveStorage('difficulty', event.target.value));
+buildSelection();
 volume.addEventListener('input', () => {
   audio.setVolume(volume.valueAsNumber / 100);
   updateVolume();
@@ -399,7 +544,14 @@ window.addEventListener('keydown', event => {
   if (guide.open || event.ctrlKey || event.metaKey || event.altKey) return;
   const onButton = event.target instanceof HTMLButtonElement;
   const onVolume = event.target === volume;
-  if (event.code === 'Enter' && game.phase !== 'playing' && !onButton && !onVolume && !event.repeat) {
+  const direction = menuDirections[event.code];
+  if (direction && !onVolume && moveSelection(...direction)) {
+    event.preventDefault();
+    const grid = startGrid.hidden ? skipGrid : startGrid;
+    grid.querySelector('[aria-checked="true"]').focus({ preventScroll: true });
+    return;
+  }
+  if (event.code === 'Enter' && game.phase !== 'playing' && (!onButton || waveSelection.contains(event.target)) && !onVolume && !event.repeat) {
     event.preventDefault();
     void activate();
   }

@@ -3,7 +3,11 @@ export const ROWS = 5;
 export const BELT_CELLS = 20;
 export const BELT_STEP = 11.6 / 12;
 export const BELT_LENGTH = BELT_CELLS * BELT_STEP;
-export const MAX_DROPS = 3;
+export const WAVE_CHOICES = [
+  { skip: 0, drops: 3, bonus: 0 },
+  { skip: 5, drops: 4, bonus: 100000 },
+  { skip: 10, drops: 5, bonus: 200000 }
+];
 const FAST_MULTIPLIER = 3;
 const PLACE_TIME = .16;
 const HIGHLIGHT_TIME = .40;
@@ -14,9 +18,9 @@ const TILE_SPACING_MULTIPLIER = 2;
 const beltCell = distance => Math.floor((BELT_LENGTH - distance) / BELT_STEP + 1e-8);
 
 export const DIFFICULTIES = {
-  easy: { speed: .8, spawnDelay: .45, colors: 2 },
-  normal: { speed: 1, spawnDelay: 0, colors: 3 },
-  hard: { speed: 1.22, spawnDelay: -.34, colors: 4 }
+  easy: { label: '初級', speed: .8, spawnDelay: .45, colors: 2 },
+  normal: { label: '中級', speed: 1, spawnDelay: 0, colors: 3 },
+  hard: { label: '上級', speed: 1.22, spawnDelay: -.34, colors: 4 }
 };
 
 export const TILES = [
@@ -80,7 +84,10 @@ export class Game {
     this.wave = 1;
     this.score = 0;
     this.drops = 0;
+    this.dropLimit = WAVE_CHOICES[0].drops;
+    this.waveBonus = 0;
     this.nextId = 0;
+    this.difficultyKey = 'normal';
     this.difficulty = DIFFICULTIES.normal;
     this.setupWave();
   }
@@ -105,16 +112,28 @@ export class Game {
     return { id: ++this.nextId, color, lane, distance, flight: 0 };
   }
 
-  begin(difficulty = 'normal') {
+  get canSkipWaves() {
+    return this.phase === 'clear' && this.wave % 5 === 0;
+  }
+
+  get dropsRemaining() {
+    return this.dropLimit - this.drops;
+  }
+
+  begin(difficulty = 'normal', choiceIndex = 0) {
+    if (this.phase !== 'ready' && this.phase !== 'over' && this.phase !== 'clear') return;
     const newRun = this.phase !== 'clear';
-    const refillDrops = !newRun && this.wave % 5 === 0;
-    if (!newRun) {
-      this.wave++;
-      if (refillDrops) this.drops = 0;
-    } else {
-      this.difficulty = Object.hasOwn(DIFFICULTIES, difficulty) ? DIFFICULTIES[difficulty] : DIFFICULTIES.normal;
-      this.wave = 1;
+    const refillDrops = this.canSkipWaves;
+    const choice = newRun || refillDrops ? WAVE_CHOICES[choiceIndex] ?? WAVE_CHOICES[0] : null;
+    if (newRun) {
+      this.difficultyKey = Object.hasOwn(DIFFICULTIES, difficulty) ? difficulty : 'normal';
+      this.difficulty = DIFFICULTIES[this.difficultyKey];
       this.score = 0;
+    }
+    this.wave = (newRun ? 1 : this.wave + 1) + (choice?.skip ?? 0);
+    this.waveBonus = choice?.bonus ?? 0;
+    if (choice) {
+      this.dropLimit = choice.drops;
       this.drops = 0;
     }
     this.setupWave();
@@ -334,7 +353,7 @@ export class Game {
     } else {
       this.drops++;
       this.onEvent('miss', { tile });
-      if (this.drops >= MAX_DROPS) this.end('drops');
+      if (this.dropsRemaining <= 0) this.end('drops');
     }
     tile.arrived = true;
   }
@@ -362,7 +381,7 @@ export class Game {
     if (this.phase !== 'playing') return;
     if (!this.resolution && this.progress >= this.waveData.target) {
       this.phase = 'clear';
-      this.score += this.wave * 250 + 50 * (MAX_DROPS - this.drops);
+      this.score += this.wave * 250 + 50 * this.dropsRemaining + this.waveBonus;
       this.onEvent('clear');
       return;
     }
