@@ -1,0 +1,31 @@
+{
+  "name": "Tile Flow",
+  "short_name": "Tile Flow",
+  "description": "タイルを受け止め、同じ色を3枚そろえる。光と音が連動する3Dパズル。",
+  "lang": "ja",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#080913",
+  "theme_color": "#080913",
+  "icons": [
+    {
+      "src": "icons/tile-flow-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icons/tile-flow-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icons/tile-flow-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}
