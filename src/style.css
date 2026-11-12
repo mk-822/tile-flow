@@ -13,12 +13,6 @@
   font-synthesis: none;
 }
 
-@property --board-control-inset {
-  syntax: "<length>";
-  inherits: true;
-  initial-value: 0px;
-}
-
 *, *::before, *::after { box-sizing: border-box; }
 [hidden] { display: none !important; }
 body { margin: 0; min-width: 300px; }
@@ -264,6 +258,7 @@ body::before {
 .screen-message { color: #d2cdeb; font-size: 13px; margin-bottom: 14px; text-align: center; }
 .wave-bonus { color: var(--cyan); font: 700 13px/1.3 var(--mono); text-align: center; }
 .wave-selection { width: min(100%, 368px); }
+.wave-selection[inert] { opacity: .55; }
 .start-heading { color: #f4eeff; font-size: clamp(12px, 1.8vw, 16px); line-height: 1.35; text-align: center; }
 .start-grid, .skip-grid { display: grid; gap: 5px; }
 .start-grid { grid-template-columns: repeat(3, minmax(0, 1fr)) minmax(74px, 1.12fr); align-items: stretch; }
@@ -325,6 +320,7 @@ body::before {
   transition: filter .15s, box-shadow .15s, transform .15s;
 }
 .play-button svg { width: 15px; height: 15px; }
+.play-button:disabled { pointer-events: none; }
 .play-button:hover { filter: brightness(1.13); box-shadow: 0 0 36px #ac86ff8c; transform: translateY(-1px); }
 .play-button:active { transform: translateY(1px); }
 .keyboard-hint { font-size: 10px; color: #b6adc9; text-align: center; }
@@ -438,7 +434,7 @@ kbd {
   font-size: 11px;
 }
 .help-button svg { width: 15px; height: 15px; }
-.touch-controls, .touch-throw-label, .mobile-help { display: none; }
+.touch-controls, .mobile-help { display: none; }
 
 .game-footer {
   display: flex;
@@ -617,55 +613,6 @@ dialog li p { color: #c0bcd7; font-size: 13px; line-height: 1.7; margin-top: 4px
     max-height: calc(100dvh - max(12px, env(safe-area-inset-top)) - max(12px, env(safe-area-inset-bottom)));
     padding: 16px 20px;
   }
-}
-@media (orientation: landscape) and (max-height: 600px) and (any-pointer: coarse) {
-  .app {
-    --place-button-size: clamp(54px, min(19dvh, 12vw), 80px);
-    --touch-inline-margin: clamp(8px, 2vw, 22px);
-  }
-  .stage { --board-control-inset: calc(var(--place-button-size) + var(--touch-inline-margin) + 7px); }
-  .stage[data-phase="playing"] ~ .touch-controls {
-    display: flex;
-    grid-area: stage;
-    align-self: end;
-    justify-self: start;
-    flex-direction: column-reverse;
-    align-items: center;
-    gap: 8px;
-    margin: 0 0 clamp(10px, 3dvh, 22px) var(--touch-inline-margin);
-    z-index: 1;
-    pointer-events: none;
-  }
-  .touch-controls button { display: none; }
-  .touch-controls :is([data-action="place"], [data-action="throw"]) {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-    height: auto;
-    aspect-ratio: 1;
-    border-radius: 50%;
-    padding: 0;
-    color: var(--text);
-    font-weight: 700;
-    line-height: 1;
-    pointer-events: auto;
-  }
-  .touch-controls .touch-place {
-    width: var(--place-button-size);
-    border-color: #c0aaffb8;
-    background: #453068f2;
-    box-shadow: 0 0 18px #9f6dff48;
-    font-size: 13px;
-  }
-  .touch-controls [data-action="throw"] {
-    width: calc(var(--place-button-size) * .76);
-    border-color: #8f7cc986;
-    background: #211a3af2;
-    font-size: 10px;
-  }
-  .touch-controls [data-action="throw"] svg { width: 16px; height: 16px; }
-  .touch-throw-label { display: block; }
-  .touch-controls button:active { transform: scale(.94); }
 }
 @media (orientation: landscape) and (max-height: 335px) {
   .stage[data-select] .screen {

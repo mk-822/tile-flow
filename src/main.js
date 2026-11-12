@@ -23,6 +23,7 @@ const sound = byId('sound');
 const pause = byId('pause');
 const fullscreen = byId('fullscreen');
 const guide = byId('guide');
+const resultControls = [waveSelection, document.querySelector('.top-actions'), byId('help'), byId('mobile-help')];
 const touchControls = [...document.querySelectorAll('[data-action]')];
 const dropSlots = [...byId('drops').children];
 const paddleSlots = [...byId('paddle-slots').children];
@@ -52,7 +53,10 @@ let destination = null;
 let movement = null;
 let moveIn = 0;
 let repeatIn = 0;
+let resultInputLocked = false;
+let resultAnimationsDone = false;
 const moveKeys = new Set();
+const ignoredResultKeys = new Set();
 const touchDirections = new Map();
 const queuedMoves = [];
 const fastKeys = new Set();
@@ -349,6 +353,21 @@ function showTrack(title) {
   nowPlaying.classList.add('show');
 }
 
+function setResultInputLocked(locked) {
+  resultInputLocked = locked;
+  play.disabled = locked;
+  for (const control of resultControls) control.inert = locked;
+}
+
+async function waitForResultAnimations() {
+  for (;;) {
+    const running = screen.getAnimations({ subtree: true }).filter(animation => animation.pending || animation.playState === 'running');
+    if (!running.length) break;
+    await Promise.allSettled(running.map(animation => animation.finished));
+  }
+  resultAnimationsDone = true;
+}
+
 function onGameEvent(type, data) {
   if (type === 'tumble') {
     audio.event(type, data);
@@ -388,7 +407,12 @@ function onGameEvent(type, data) {
     releaseInputs();
     updateScreen();
     audio.setRunning(game.phase === 'playing' || game.phase === 'clear', game.wave);
-    if (game.phase === 'playing') stage.focus({ preventScroll: true });
+    if (type === 'clear' || type === 'over') {
+      resultAnimationsDone = false;
+      setResultInputLocked(true);
+      void waitForResultAnimations();
+      stage.focus({ preventScroll: true });
+    } else if (game.phase === 'playing') stage.focus({ preventScroll: true });
     else if (!guide.open && !document.hidden) play.focus({ preventScroll: true });
   }
   audio.event(type, data);
@@ -396,7 +420,7 @@ function onGameEvent(type, data) {
 }
 
 function activate() {
-  if (!scene || game.phase === 'playing') return;
+  if (!scene || resultInputLocked || game.phase === 'playing') return;
   void audio.unlock();
   if (game.phase === 'paused') game.pause();
   else game.begin(difficultyKeys[startColumn], game.phase === 'clear' ? skipChoice : startRow);
@@ -435,7 +459,7 @@ function updateGamepad() {
   const previous = previousPad;
   const pad = readGamepad(previous?.stick);
   previousPad = pad;
-  if (!document.hasFocus()) return false;
+  if (resultInputLocked || !document.hasFocus()) return false;
   const confirm = pad?.confirm && !previous?.confirm;
   const pausePressed = pad?.pause && !previous?.pause;
   const direction = pad?.direction ?? null;
@@ -532,7 +556,7 @@ document.addEventListener('fullscreenchange', () => {
 // Some browsers require a page gesture to start audio after a gamepad-only start.
 for (const type of ['pointerup', 'keydown']) {
   window.addEventListener(type, event => {
-    if (!event.isTrusted || !audio.enabled || !audio.running) return;
+    if (!event.isTrusted || resultInputLocked || !audio.enabled || !audio.running) return;
     if (audio.player.paused || audio.ctx?.state === 'suspended') {
       void audio.unlock();
       audio.syncPlayback();
@@ -542,8 +566,18 @@ for (const type of ['pointerup', 'keydown']) {
 
 window.addEventListener('keydown', event => {
   if (guide.open || event.ctrlKey || event.metaKey || event.altKey) return;
+  if (resultInputLocked) ignoredResultKeys.add(event.code);
+  else if (!event.repeat) ignoredResultKeys.delete(event.code);
+  if (ignoredResultKeys.has(event.code)) {
+    event.preventDefault();
+    return;
+  }
   const onButton = event.target instanceof HTMLButtonElement;
   const onVolume = event.target === volume;
+  if (event.code === 'Enter' && event.repeat && game.phase !== 'playing') {
+    event.preventDefault();
+    return;
+  }
   const direction = menuDirections[event.code];
   if (direction && !onVolume && moveSelection(...direction)) {
     event.preventDefault();
@@ -576,6 +610,7 @@ window.addEventListener('keydown', event => {
   }
 });
 window.addEventListener('keyup', event => {
+  ignoredResultKeys.delete(event.code);
   if (moveKeys.delete(event.code)) syncMovement();
   fastKeys.delete(event.code);
 });
@@ -676,6 +711,11 @@ function frame(now) {
     lastBeat = audio.beat;
   }
   scene.render(game, dt, fast);
+  const rippleActive = game.phase === 'clear' && !scene.reduced.matches && scene.ripple;
+  if (resultInputLocked && resultAnimationsDone && !rippleActive) {
+    setResultInputLocked(false);
+    if (!guide.open && !document.hidden) play.focus({ preventScroll: true });
+  }
   requestAnimationFrame(frame);
 }
 

@@ -152,11 +152,22 @@ export class GameAudio {
         this.tone(root + chainPitch + 7, time, data.duration + .06, .073, 'sine', this.master, .16, root + chainPitch + 26);
         break;
       case 'match':
-      case 'clear':
       case 'start': {
         if (type === 'match') this.tone(45, time, .34, .19, 'sine', this.master, .008, 25);
         const notes = type === 'start' ? [0, 7, 14] : [0, 7, 12, 15, 19, 24];
         notes.forEach((n, i) => this.tone(root + n + chainPitch, time + i * .055, .65, .12, i % 3 ? 'sine' : 'triangle'));
+        break;
+      }
+      case 'clear': {
+        const melody = [[7, 0], [12, .16], [16, .32], [19, .51], [21, .70], [19, .87], [24, 1.02]];
+        melody.forEach(([note, offset], index) => {
+          const last = index === melody.length - 1;
+          this.tone(root + note, time + offset, last ? .55 : .27, .105, 'triangle', this.master, .024);
+        });
+        this.tone(root - 12, time + .51, .60, .075);
+        for (const note of [0, 4, 7, 14]) {
+          this.tone(root + note, time + 1.02, .58, .048, 'sine', this.master, .035);
+        }
         break;
       }
       case 'miss':
