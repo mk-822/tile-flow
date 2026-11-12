@@ -36,7 +36,7 @@ const menuDirections = {
 };
 const difficultyKeys = Object.keys(DIFFICULTIES);
 const MOVE_INTERVAL = 1 / 7;
-const KEY_REPEAT_DELAY = .28;
+const MOVE_REPEAT_DELAY = .28;
 const DRAG_SLOP = 10;
 const HOLD_DELAY = 280;
 
@@ -46,7 +46,6 @@ let lastTime;
 let fastPointer = null;
 let lastBeat = 0;
 let dragPointer = null;
-let directionButton = null;
 let padDirection = null;
 let previousPad = null;
 let destination = null;
@@ -54,6 +53,7 @@ let movement = null;
 let moveIn = 0;
 let repeatIn = 0;
 const moveKeys = new Set();
+const touchDirections = new Map();
 const queuedMoves = [];
 const fastKeys = new Set();
 const gestures = new Map();
@@ -322,6 +322,7 @@ function toggleSound() {
 
 function releaseInputs() {
   moveKeys.clear();
+  touchDirections.clear();
   queuedMoves.length = 0;
   fastKeys.clear();
   gestures.clear();
@@ -330,7 +331,6 @@ function releaseInputs() {
   repeatIn = 0;
   fastPointer = null;
   dragPointer = null;
-  directionButton = null;
   padDirection = null;
   destination = null;
   showFast(false);
@@ -411,16 +411,24 @@ function runAction(action) {
 }
 
 function syncMovement() {
-  const next = keys[[...moveKeys].at(-1)] ?? padDirection;
+  const next = keys[[...moveKeys].at(-1)] ?? padDirection ?? [...touchDirections.values()].at(-1) ?? null;
   if (next === movement) return;
   movement = next;
-  repeatIn = movement ? KEY_REPEAT_DELAY : 0;
+  repeatIn = movement ? MOVE_REPEAT_DELAY : 0;
 }
 
 function queueMove(direction) {
   destination = null;
   if (queuedMoves.length < LANES - 1) queuedMoves.push(direction);
   moveHeld();
+}
+
+function setTouchDirection(pointerId, direction) {
+  if ((touchDirections.get(pointerId) ?? null) === direction) return;
+  touchDirections.delete(pointerId);
+  if (direction) touchDirections.set(pointerId, direction);
+  syncMovement();
+  if (direction) queueMove(direction);
 }
 
 function updateGamepad() {
@@ -475,14 +483,8 @@ function moveHeld() {
     if (repeatIn <= 0) movePaddle(movement);
     return;
   }
-  let direction = directionButton?.action;
-  if (!direction) {
-    if (destination === game.lane) destination = null;
-    const target = gestures.get(dragPointer)?.target ?? destination;
-    if (target === null || target === game.lane) return;
-    direction = target < game.lane ? 'left' : 'right';
-  }
-  movePaddle(direction);
+  if (destination === game.lane) destination = null;
+  if (destination !== null) movePaddle(destination < game.lane ? 'left' : 'right');
 }
 
 function showGuide() {
@@ -587,28 +589,23 @@ for (const button of touchControls) {
   const direction = action === 'left' || action === 'right';
   if (action !== 'fast') {
     button.addEventListener('click', event => {
-      if (direction && event.detail === 0) destination = null;
-      if (!direction || event.detail === 0) runAction(action);
+      if (!direction) runAction(action);
+      else if (event.detail === 0) queueMove(action);
       stage.focus({ preventScroll: true });
     });
     if (!direction) continue;
   }
   button.addEventListener('pointerdown', event => {
-    if (event.button !== 0) return;
+    if (game.phase !== 'playing' || event.button !== 0) return;
     button.setPointerCapture(event.pointerId);
-    if (direction) {
-      destination = null;
-      directionButton = { id: event.pointerId, action };
-      moveHeld();
-    } else {
-      fastPointer = event.pointerId;
-    }
+    if (direction) setTouchDirection(event.pointerId, action);
+    else fastPointer = event.pointerId;
     stage.focus({ preventScroll: true });
   });
   for (const type of ['pointerup', 'pointercancel', 'lostpointercapture']) {
     button.addEventListener(type, event => {
       if (fastPointer === event.pointerId) fastPointer = null;
-      if (directionButton?.id === event.pointerId) directionButton = null;
+      if (direction) setTouchDirection(event.pointerId, null);
       if (type === 'pointerup' && game.phase === 'playing') stage.focus({ preventScroll: true });
     });
   }
@@ -618,7 +615,7 @@ viewport.addEventListener('pointerdown', event => {
   if (game.phase !== 'playing' || event.button !== 0) return;
   const { clientX: x, clientY: y } = event;
   gestures.set(event.pointerId, {
-    x, y, lane: game.lane, action: scene.pointerAction(x, y), started: performance.now(), moved: false
+    x, y, action: scene.pointerAction(x, y), started: performance.now(), moved: false
   });
   viewport.setPointerCapture(event.pointerId);
   stage.focus({ preventScroll: true });
@@ -629,20 +626,19 @@ viewport.addEventListener('pointermove', event => {
   const dx = event.clientX - pointer.x;
   const dy = event.clientY - pointer.y;
   if (Math.hypot(dx, dy) > DRAG_SLOP) pointer.moved = true;
-  if (pointer.moved && dragPointer === null && Math.abs(dx) > Math.abs(dy)) {
-    destination = null;
-    dragPointer = event.pointerId;
-  }
+  if (dragPointer === null && Math.abs(dx) > Math.max(DRAG_SLOP, Math.abs(dy))) dragPointer = event.pointerId;
   if (dragPointer !== event.pointerId) return;
-  const lanes = Math.round(dx / scene.pointerLaneWidth);
-  pointer.target = Math.max(0, Math.min(LANES - 1, pointer.lane + lanes));
-  moveHeld();
+  const direction = dx < -DRAG_SLOP ? 'left' : dx > DRAG_SLOP ? 'right' : null;
+  setTouchDirection(event.pointerId, direction);
 });
 for (const type of ['pointerup', 'pointercancel', 'lostpointercapture']) {
   viewport.addEventListener(type, event => {
     const pointer = gestures.get(event.pointerId);
     gestures.delete(event.pointerId);
-    if (dragPointer === event.pointerId) dragPointer = null;
+    if (dragPointer === event.pointerId) {
+      dragPointer = null;
+      setTouchDirection(event.pointerId, null);
+    }
     if (type !== 'pointerup' || !pointer?.action || pointer.moved) return;
     const { clientX: x, clientY: y } = event;
     if (Math.hypot(x - pointer.x, y - pointer.y) <= DRAG_SLOP && scene.pointerAction(x, y) === pointer.action) {
