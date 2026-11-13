@@ -9,8 +9,11 @@ export const WAVE_CHOICES = [
   { skip: 10, drops: 5, bonus: 200000 }
 ];
 const FAST_MULTIPLIER = 3;
+const MAX_BELT_SPEED = 3.75;
+const MAX_START_SPEED = 3.5;
+const SPEED_GAIN_PER_SECOND = .001;
+const SPRINT_SPEED_MULTIPLIER = 1.5;
 const PLACE_TIME = .16;
-const HIGHLIGHT_TIME = .40;
 const SETTLE_TIME = .60;
 const EXTRA_TILE_HIGHLIGHT = .06;
 const OPENING_LANES = [1, 3];
@@ -18,9 +21,9 @@ const TILE_SPACING_MULTIPLIER = 2;
 const beltCell = distance => Math.floor((BELT_LENGTH - distance) / BELT_STEP + 1e-8);
 
 export const DIFFICULTIES = {
-  easy: { label: '初級', speed: .8, spawnDelay: .45, colors: 2 },
-  normal: { label: '中級', speed: 1, spawnDelay: 0, colors: 3 },
-  hard: { label: '上級', speed: 1.22, spawnDelay: -.34, colors: 4 }
+  easy: { label: '初級', speed: .8, spawnDelay: .45, colors: 2, highlightTime: .8 },
+  normal: { label: '中級', speed: 1, spawnDelay: 0, colors: 3, highlightTime: .6 },
+  hard: { label: '上級', speed: 1.22, spawnDelay: -.34, colors: 4, highlightTime: .4 }
 };
 
 export const TILES = [
@@ -29,8 +32,13 @@ export const TILES = [
   { color: '#ffbd51', name: 'アンバー', symbol: '＋' },
   { color: '#8d81ff', name: 'パープル', symbol: '△' },
   { color: '#8af579', name: 'ライム', symbol: '＝' },
-  { color: '#ff705e', name: 'コーラル', symbol: '×' }
+  { color: '#ff705e', name: 'コーラル', symbol: '×' },
+  { color: '#16b578', name: 'エメラルド', symbol: '⬟' },
+  { color: '#4078ff', name: 'ブルー', symbol: '≋' },
+  { color: '#fff1fa', name: 'ワイルド', symbol: '★' }
 ];
+export const WILD_TILE = TILES.length - 1;
+const BASE_COLOR_COUNT = 6;
 
 const WAVE_TYPES = [
   { title: 'FIRST LIGHT', goal: 'match', label: 'FLOW', target: 3 },
@@ -42,10 +50,21 @@ const WAVE_TYPES = [
 ];
 
 export function waveInfo(number) {
+  if (number >= 30 && number % 10 === 0) {
+    return { title: 'SPRINT WAVE', goal: 'tiles', label: 'タイル', target: 24, sprint: true };
+  }
+  if (number === 20 || (number >= 25 && number % 10 === 5)) {
+    const target = Math.min(5, 2 + Math.floor((number - 20) / 30));
+    return { title: 'CHAIN WAVE', goal: 'chain', label: 'CHAIN', target };
+  }
   const cycle = Math.floor((number - 1) / WAVE_TYPES.length);
   const wave = WAVE_TYPES[(number - 1) % WAVE_TYPES.length];
   const increase = wave.goal === 'points' ? 700 : wave.goal === 'tiles' ? 5 : 1;
   return { ...wave, target: wave.target + increase * cycle };
+}
+
+function matchesColor(tile, color) {
+  return tile && (tile.color === color || tile.color === WILD_TILE);
 }
 
 export function findMatches(board) {
@@ -58,18 +77,29 @@ export function findMatches(board) {
   ];
   for (let lane = 0; lane < LANES; lane++) {
     for (let row = 0; row < board[lane].length; row++) {
-      const color = board[lane][row].color;
       for (const { dx, dy, kind, points } of directions) {
-        if (board[lane - dx]?.[row - dy]?.color === color) continue;
+        let color = board[lane][row].color;
+        if (color === WILD_TILE) {
+          // Use the first colored tile after the leading wilds as the line's color.
+          let x = lane + dx;
+          let y = row + dy;
+          while (board[x]?.[y]?.color === WILD_TILE) {
+            x += dx;
+            y += dy;
+          }
+          color = board[x]?.[y]?.color ?? WILD_TILE;
+        }
+        const previous = board[lane - dx]?.[row - dy];
+        if (matchesColor(previous, color) || (color === WILD_TILE && previous)) continue;
         const cells = [];
         let x = lane;
         let y = row;
-        while (board[x]?.[y]?.color === color) {
+        while (matchesColor(board[x]?.[y], color)) {
           cells.push({ lane: x, row: y, tile: board[x][y] });
           x += dx;
           y += dy;
         }
-        if (cells.length >= 3) matches.push({ cells, kind, points });
+        if (cells.length >= 3) matches.push({ cells, kind, points, color });
       }
     }
   }
@@ -237,8 +267,10 @@ export class Game {
 
   drawColor() {
     if (!this.bag.length) {
-      const colors = Math.min(TILES.length, this.difficulty.colors + Math.floor((this.wave - 1) / 2));
+      const colors = Math.min(BASE_COLOR_COUNT, this.difficulty.colors + Math.floor((this.wave - 1) / 2))
+        + Number(this.wave >= 60) + Number(this.wave >= 90);
       this.bag = Array.from({ length: colors * 3 }, (_, i) => i % colors);
+      if (this.wave >= 6) this.bag.push(WILD_TILE);
       for (let i = this.bag.length - 1; i > 0; i--) {
         const j = Math.floor(this.random() * (i + 1));
         [this.bag[i], this.bag[j]] = [this.bag[j], this.bag[i]];
@@ -288,8 +320,9 @@ export class Game {
     const result = this.summarizeMatches(matches, chain);
     this.score += result.total;
     this.progress += result.progress;
-    this.resolution = { remaining: HIGHLIGHT_TIME, chain, stopsBelt: true, clear: result };
-    this.onEvent('highlight', { cells: [...result.unique.values()], chain, duration: HIGHLIGHT_TIME });
+    const duration = this.difficulty.highlightTime;
+    this.resolution = { remaining: duration, chain, stopsBelt: true, clear: result };
+    this.onEvent('highlight', { cells: [...result.unique.values()], chain, duration });
   }
 
   summarizeMatches(matches, chain) {
@@ -312,12 +345,12 @@ export class Game {
     const vertical = previous.matches.find(match => {
       const top = match.cells.at(-1);
       return match.kind === 'vertical' && top.lane === cell.lane && top.row === cell.row - 1 &&
-        top.tile.color === cell.tile.color;
+        (match.color === WILD_TILE || matchesColor(cell.tile, match.color));
     });
     if (!vertical) return;
     // Keep the current clear intact so other new lines can become the next chain.
     const matches = previous.matches.map(match => match === vertical ? {
-      ...match, cells: [...match.cells, cell]
+      ...match, color: match.color === WILD_TILE ? cell.tile.color : match.color, cells: [...match.cells, cell]
     } : match);
     const clear = this.summarizeMatches(matches, chain);
     this.score += clear.total - previous.total;
@@ -334,10 +367,13 @@ export class Game {
       if (newRow !== row) shifts.push({ tile, lane, from: row, row: newRow });
       return true;
     }));
+    if (this.waveData.goal === 'chain' && chain === 2) this.progress++;
+    const recoveredDrop = chain >= 4 && this.drops > 0;
+    if (recoveredDrop) this.drops--;
     this.resolution = { remaining: SETTLE_TIME, chain: chain + 1, stopsBelt: true };
     const longest = Math.max(...matches.map(match => match.cells.length));
     this.onEvent('match', {
-      cells: [...unique.values()], shifts, total, chain, lines: matches.length, longest, duration: SETTLE_TIME
+      cells: [...unique.values()], shifts, total, chain, lines: matches.length, longest, recoveredDrop, duration: SETTLE_TIME
     });
   }
 
@@ -364,7 +400,9 @@ export class Game {
   }
 
   beltSpeed() {
-    return Math.min(3.75, 1.38 + (this.wave - 1) * .13 + this.elapsed * .004) * this.difficulty.speed;
+    if (this.waveData.sprint) return MAX_BELT_SPEED * SPRINT_SPEED_MULTIPLIER * this.difficulty.speed;
+    const startSpeed = 1.38 + (MAX_START_SPEED - 1.38) * Math.min(1, (this.wave - 1) / 19);
+    return Math.min(MAX_BELT_SPEED, startSpeed + this.elapsed * SPEED_GAIN_PER_SECOND) * this.difficulty.speed;
   }
 
   get conveyorPaused() {

@@ -1,4 +1,4 @@
-const STEPS = [0, 2, 3, 7, 9, 12];
+const STEPS = [0, 2, 3, 7, 9, 12, 14, 16, 19];
 const MASTER_GAIN = .68;
 const MUSIC_GAIN = .18;
 export const TRACKS = [

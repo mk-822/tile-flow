@@ -290,16 +290,18 @@ function announce(text) {
 }
 
 function showWaveGoal() {
-  const { goal, target } = game.waveData;
+  const { goal, target, sprint } = game.waveData;
   const count = target.toLocaleString('ja-JP');
   const text = {
     match: `FLOWを${count}回`,
     horizontal: `横のFLOWを${count}回`,
     diagonal: `斜めのFLOWを${count}回`,
     tiles: `タイルを${count}枚さばく`,
-    points: `${count}点を獲得`
+    points: `${count}点を獲得`,
+    chain: `2連鎖以上を${count}回`
   }[goal];
-  byId('wave-goal-number').textContent = `WAVE ${String(game.wave).padStart(2, '0')}`;
+  const wave = `WAVE ${String(game.wave).padStart(2, '0')}`;
+  byId('wave-goal-number').textContent = sprint ? `${wave} / SPRINT` : wave;
   byId('wave-goal-text').textContent = text;
   const banner = byId('wave-goal');
   banner.classList.remove('show');
@@ -383,8 +385,8 @@ function onGameEvent(type, data) {
     if (data.chain > 1) label = `${data.chain}× CHAIN`;
     else if (data.lines > 1) label = `${data.lines}× FLOW`;
     else if (data.longest > 3) label = `${data.longest} TILE FLOW`;
-    announce(`${label} +${data.total}`);
-    byId('status-live').textContent = `${label}、${data.total}点`;
+    announce(`${label} +${data.total}${data.recoveredDrop ? '  /  DROP +1' : ''}`);
+    byId('status-live').textContent = `${label}、${data.total}点${data.recoveredDrop ? '、DROPを1回復' : ''}`;
   }
   if (type === 'miss') {
     announce('TILE MISSED');

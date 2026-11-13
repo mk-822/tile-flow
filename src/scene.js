@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { BELT_CELLS, BELT_LENGTH, BELT_STEP, LANES, ROWS, TILES } from './game.js';
+import { BELT_CELLS, BELT_LENGTH, BELT_STEP, LANES, ROWS, TILES, WILD_TILE } from './game.js';
 import { Refraction } from './refraction.js';
 
 const CELL = 1.06;
@@ -123,7 +123,7 @@ function makeGlow() {
   });
 }
 
-function makeTileFace(symbol) {
+function makeTileFace(symbol, wild) {
   return canvasTexture(ctx => {
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
@@ -131,6 +131,14 @@ function makeTileFace(symbol) {
     ctx.strokeStyle = 'rgba(255,255,255,.61)';
     ctx.lineWidth = 2;
     ctx.strokeRect(9, 9, 110, 110);
+    if (wild) {
+      const spectrum = ctx.createLinearGradient(9, 9, 119, 119);
+      spectrum.addColorStop(0, '#30e8ff');
+      spectrum.addColorStop(.48, '#fa65d9');
+      spectrum.addColorStop(1, '#ffbd51');
+      ctx.fillStyle = spectrum;
+      ctx.fillRect(11, 11, 106, 106);
+    }
     ctx.fillStyle = 'rgba(10,12,38,.72)';
     ctx.fillText(symbol, 64, 66);
     ctx.fillStyle = 'rgba(255,255,255,.74)';
@@ -416,7 +424,7 @@ export class StageScene {
     this.pieceTrim = new RoundedBoxGeometry(.795, .06, TILE_DEPTH - .035, 2, .03);
     this.pieceFace = new THREE.PlaneGeometry(.69, TILE_DEPTH - .13);
     this.pieceGlint = new THREE.BoxGeometry(.66, .012, .018);
-    this.tileMaterials = TILES.map(({ color, symbol }) => {
+    this.tileMaterials = TILES.map(({ color, symbol }, index) => {
       const crystal = new THREE.Color(color);
       const trimColor = crystal.clone().lerp(new THREE.Color('#ffffff'), .31);
       return {
@@ -428,7 +436,7 @@ export class StageScene {
           color: trimColor, metalness: .3, roughness: .33, emissive: crystal, emissiveIntensity: .52
         }),
         glint: luminous(trimColor),
-        face: new THREE.MeshBasicMaterial({ map: makeTileFace(symbol), transparent: true, depthWrite: false, toneMapped: false })
+        face: new THREE.MeshBasicMaterial({ map: makeTileFace(symbol, index === WILD_TILE), transparent: true, depthWrite: false, toneMapped: false })
       };
     });
   }
