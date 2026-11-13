@@ -54,7 +54,7 @@ export function waveInfo(number) {
     return { title: 'SPRINT WAVE', goal: 'tiles', label: 'タイル', target: 24, sprint: true };
   }
   if (number === 20 || (number >= 25 && number % 10 === 5)) {
-    const target = Math.min(5, 2 + Math.floor((number - 20) / 30));
+    const target = Math.min(8, 3 + Math.floor((number - 20) / 20));
     return { title: 'CHAIN WAVE', goal: 'chain', label: 'CHAIN', target };
   }
   const cycle = Math.floor((number - 1) / WAVE_TYPES.length);
@@ -367,7 +367,7 @@ export class Game {
       if (newRow !== row) shifts.push({ tile, lane, from: row, row: newRow });
       return true;
     }));
-    if (this.waveData.goal === 'chain' && chain === 2) this.progress++;
+    if (this.waveData.goal === 'chain' && chain >= 2) this.progress++;
     const recoveredDrop = chain >= 4 && this.drops > 0;
     if (recoveredDrop) this.drops--;
     this.resolution = { remaining: SETTLE_TIME, chain: chain + 1, stopsBelt: true };

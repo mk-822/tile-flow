@@ -298,7 +298,7 @@ function showWaveGoal() {
     diagonal: `斜めのFLOWを${count}回`,
     tiles: `タイルを${count}枚さばく`,
     points: `${count}点を獲得`,
-    chain: `2連鎖以上を${count}回`
+    chain: `連鎖カウントを${count}ためる`
   }[goal];
   const wave = `WAVE ${String(game.wave).padStart(2, '0')}`;
   byId('wave-goal-number').textContent = sprint ? `${wave} / SPRINT` : wave;
